@@ -51,6 +51,12 @@ module Administrate
     def initialize(scoped_resource, dashboard_class, term)
       @dashboard_class = dashboard_class
       @scoped_resource = scoped_resource
+      new_term = term.split(":")
+      if new_term.length() > 1
+        #checking if first part is a valid col in scoped_resource
+        col = new_term[0]
+        term = new_term[1] unless @scoped_resource.column_names.include?(col)
+      end
       @query = Query.new(term, valid_filters.keys)
     end
 
@@ -85,13 +91,15 @@ module Administrate
     end
 
     def query_template
-      search_attributes.map do |attr|
-        table_name = query_table_name(attr)
-        searchable_fields(attr).map do |field|
-          column_name = column_to_query(field)
-          "LOWER(CAST(#{table_name}.#{column_name} AS CHAR(256))) LIKE ?"
-        end.join(" OR ")
-      end.join(" OR ")
+      res = search_attributes.map do |attr|
+          table_name = query_table_name(attr)
+          next unless table_name
+            searchable_fields(attr).map do |field| 
+              column_name = column_to_query(field)
+              "LOWER(CAST(#{table_name}.#{column_name} AS CHAR(256))) LIKE ?"
+            end.join(" OR ")
+        end
+      res.compact.join(" OR ")
     end
 
     def searchable_fields(attr)
@@ -114,9 +122,13 @@ module Administrate
     end
 
     def search_results(resources)
+      res = query_template
+      q_values = query_values
+      size_diff = (res.split(" OR ").length() - q_values.length()).abs()
+      q_values.pop(size_diff)
       resources.
         left_joins(tables_to_join).
-        where(query_template, *query_values)
+        where(query_template, *q_values)
     end
 
     def valid_filters
@@ -143,8 +155,7 @@ module Administrate
           end
         ActiveRecord::Base.connection.quote_table_name(unquoted_table_name)
       else
-        ActiveRecord::Base.connection.
-          quote_table_name(@scoped_resource.table_name)
+        @scoped_resource.column_names.include?(attr.to_s) ? ActiveRecord::Base.connection.quote_table_name(@scoped_resource.table_name): false
       end
     end
 
