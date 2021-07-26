@@ -51,8 +51,8 @@ module Administrate
     def initialize(scoped_resource, dashboard_class, term)
       @dashboard_class = dashboard_class
       @scoped_resource = scoped_resource
-      new_term = term.split(":")
-      if new_term.length() > 1
+      new_term = term&.split(":")
+      if new_term && new_term.length() > 1
         #checking if first part is a valid col in scoped_resource
         col = new_term[0]
         term = new_term[1] unless @scoped_resource.column_names.include?(col)
@@ -93,7 +93,12 @@ module Administrate
     def query_template
       res = search_attributes.map do |attr|
           table_name = query_table_name(attr)
-          next unless table_name
+          if !association_search?(attr)
+            begin
+              next unless @scoped_resource.column_names.include?(attr.to_s)
+            rescue ActiveRecord::StatementInvalid => e
+            end
+          end
             searchable_fields(attr).map do |field| 
               column_name = column_to_query(field)
               "LOWER(CAST(#{table_name}.#{column_name} AS CHAR(256))) LIKE ?"
@@ -155,7 +160,7 @@ module Administrate
           end
         ActiveRecord::Base.connection.quote_table_name(unquoted_table_name)
       else
-        @scoped_resource.column_names.include?(attr.to_s) ? ActiveRecord::Base.connection.quote_table_name(@scoped_resource.table_name): false
+        ActiveRecord::Base.connection.quote_table_name(@scoped_resource.table_name)
       end
     end
 

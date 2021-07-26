@@ -217,7 +217,7 @@ describe Administrate::Search do
         search.run
 
         expect(ActiveSupport::Deprecation).to have_received(:warn).
-          with(/:class_name is deprecated/)
+        twice.with(/:class_name is deprecated/)
       end
     end
 
